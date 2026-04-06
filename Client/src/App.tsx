@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import "./index.css";
 import {
+  activateSession,
   addGame,
   checkAuth,
   createPlayer,
@@ -581,6 +582,16 @@ function App() {
     }
   }
 
+  async function handleActivateSession() {
+    if (!selectedSession) return;
+    try {
+      await activateSession(selectedSession.id);
+      await loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Fehler");
+    }
+  }
+
   const pieData = statsByWins
     .filter((stat) => stat.wins > 0)
     .map((stat) => ({ name: stat.name, value: stat.wins }));
@@ -756,6 +767,11 @@ function App() {
                 >
                   + Spiel erfassen
                 </button>
+                {!selectedSession.active && (
+                  <button className="secondary-btn" onClick={handleActivateSession}>
+                    Wieder aktivieren
+                  </button>
+                )}
                 <button
                   className="secondary-btn"
                   onClick={handleEndSession}

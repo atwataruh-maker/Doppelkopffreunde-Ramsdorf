@@ -521,6 +521,21 @@ app.post("/api/sessions/:id/end", writeLimiter, (req, res) => {
     audit("session.end", sessionId, req);
     res.json({ ok: true });
 });
+app.post("/api/sessions/:id/activate", writeLimiter, (req, res) => {
+    const sessionId = String(req.params.id);
+    const result = db_1.db
+        .prepare(`
+      UPDATE sessions
+      SET active = 1
+      WHERE id = ?
+    `)
+        .run(sessionId);
+    if (result.changes === 0) {
+        return res.status(404).json({ error: "Runde nicht gefunden." });
+    }
+    audit("session.activate", sessionId, req);
+    res.json({ ok: true });
+});
 app.use((error, _req, res, _next) => {
     console.error(error);
     if (typeof error === "object" &&

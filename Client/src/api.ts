@@ -134,3 +134,13 @@ export async function endSession(sessionId: string) {
   });
   return handleResponse<{ ok: true }>(response);
 }
+
+export async function activateSession(sessionId: string) {
+  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/activate`, {
+    method: "POST",
+    headers: {
+      "x-app-password": getPassword()
+    }
+  });
+  return handleResponse<{ ok: true }>(response);
+}
