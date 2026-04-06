@@ -3,6 +3,7 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  LabelList,
   XAxis,
   YAxis,
   Tooltip,
@@ -20,7 +21,7 @@ import {
   endSession,
   fetchPlayers,
   fetchSessions,
-  undoGame
+  updateGame
 } from "./api";
 import { Game, Player, PlayerStats, Session, SiegerPartei, Spieltyp } from "./types";
 
@@ -66,6 +67,138 @@ function getPlayerName(players: Player[], playerId: string | null) {
 function getGamePlayers(session: Session, game: Game) {
   const playerIds = game.scores.map((score) => score.playerId);
   return session.players.filter((player) => playerIds.includes(player.id));
+}
+
+function buildPlayerStats(players: Player[], sessions: Session[]) {
+  const map = new Map<string, PlayerStats>();
+
+  players.forEach((player) => {
+    map.set(player.id, {
+      id: player.id,
+      name: player.name,
+      totalPoints: 0,
+      totalPaidIn: 0,
+      totalGames: 0,
+      wins: 0,
+      winRate: 0,
+      bockRounds: 0,
+      hochzeiten: 0,
+      solos: 0
+    });
+  });
+
+  sessions.forEach((session) => {
+    session.games.forEach((game) => {
+      game.scores.forEach((score) => {
+        const entry = map.get(score.playerId);
+        if (!entry) return;
+        entry.totalPoints += score.score;
+        if (score.score < 0) {
+          entry.totalPaidIn += Math.abs(score.score);
+        }
+        entry.totalGames += 1;
+        if (score.isWinner) entry.wins += 1;
+        if (game.meta.isBockrunde) entry.bockRounds += 1;
+        if (game.meta.gewonnenVon === "Hochzeit" && game.meta.hochzeitPlayerId === score.playerId) {
+          entry.hochzeiten += 1;
+        }
+        if (game.meta.gewonnenVon === "Solo" && game.meta.soloPlayerId === score.playerId) {
+          entry.solos += 1;
+        }
+      });
+    });
+  });
+
+  return Array.from(map.values())
+    .map((entry) => ({
+      ...entry,
+      winRate: entry.totalGames > 0 ? Math.round((entry.wins / entry.totalGames) * 100) : 0
+    }))
+    .sort((left, right) => right.totalPoints - left.totalPoints || left.name.localeCompare(right.name));
+}
+
+function buildOverviewStats(sessions: Session[], stats: PlayerStats[]) {
+  const totalSessions = sessions.length;
+  const totalGames = sessions.reduce((sum, session) => sum + session.games.length, 0);
+  const bockRounds = sessions.reduce(
+    (sum, session) => sum + session.games.filter((game) => game.meta.isBockrunde).length,
+    0
+  );
+  const hochzeiten = sessions.reduce(
+    (sum, session) => sum + session.games.filter((game) => game.meta.gewonnenVon === "Hochzeit").length,
+    0
+  );
+  const solos = sessions.reduce(
+    (sum, session) => sum + session.games.filter((game) => game.meta.gewonnenVon === "Solo").length,
+    0
+  );
+  const totalPaidIn = stats.reduce((sum, player) => sum + player.totalPaidIn, 0);
+
+  return { totalSessions, totalGames, bockRounds, hochzeiten, solos, totalPaidIn };
+}
+
+function buildPairStats(sessions: Session[]) {
+  const pairMap = new Map<string, { names: string[]; games: number }>();
+
+  sessions.forEach((session) => {
+    session.games.forEach((game) => {
+      const gamePlayers = getGamePlayers(session, game)
+        .map((player) => player.name)
+        .sort((left, right) => left.localeCompare(right));
+
+      for (let index = 0; index < gamePlayers.length; index += 1) {
+        for (let inner = index + 1; inner < gamePlayers.length; inner += 1) {
+          const names = [gamePlayers[index], gamePlayers[inner]];
+          const key = names.join("::");
+          const existing = pairMap.get(key);
+
+          if (existing) {
+            existing.games += 1;
+          } else {
+            pairMap.set(key, { names, games: 1 });
+          }
+        }
+      }
+    });
+  });
+
+  return Array.from(pairMap.values()).sort(
+    (left, right) => right.games - left.games || formatPairLabel(left.names).localeCompare(formatPairLabel(right.names))
+  );
+}
+
+function buildOutcomePairStats(sessions: Session[], outcome: "wins" | "losses") {
+  const pairMap = new Map<string, { names: string[]; games: number }>();
+
+  sessions.forEach((session) => {
+    session.games.forEach((game) => {
+      const relevantPlayers = getGamePlayers(session, game)
+        .filter((player) => {
+          const score = game.scores.find((entry) => entry.playerId === player.id);
+          return outcome === "wins" ? score?.isWinner : !score?.isWinner;
+        })
+        .map((player) => player.name)
+        .sort((left, right) => left.localeCompare(right));
+
+      for (let index = 0; index < relevantPlayers.length; index += 1) {
+        for (let inner = index + 1; inner < relevantPlayers.length; inner += 1) {
+          const names = [relevantPlayers[index], relevantPlayers[inner]];
+          const key = names.join("::");
+          const existing = pairMap.get(key);
+
+          if (existing) {
+            existing.games += 1;
+          } else {
+            pairMap.set(key, { names, games: 1 });
+          }
+        }
+      }
+    });
+  });
+
+  return Array.from(pairMap.values()).sort(
+    (left, right) => right.games - left.games || formatPairLabel(left.names).localeCompare(formatPairLabel(right.names))
+  );
 }
 
 function formatPairLabel(names: string[]) {
@@ -127,6 +260,7 @@ function App() {
   const [newPlayerName, setNewPlayerName] = useState("");
 
   const [showAddGame, setShowAddGame] = useState(false);
+  const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [selectedGamePlayers, setSelectedGamePlayers] = useState<string[]>(initialGamePlayers);
   const [gewonnenVon, setGewonnenVon] = useState<Spieltyp>("Normal");
   const [siegerPartei, setSiegerPartei] = useState<SiegerPartei>("Re");
@@ -196,53 +330,7 @@ function App() {
     }
   }, [selectedGamePlayerObjects, hochzeitPlayerId, soloPlayerId]);
 
-  const stats = useMemo<PlayerStats[]>(() => {
-    const map = new Map<string, PlayerStats>();
-
-    players.forEach((player) => {
-      map.set(player.id, {
-        id: player.id,
-        name: player.name,
-        totalPoints: 0,
-        totalPaidIn: 0,
-        totalGames: 0,
-        wins: 0,
-        winRate: 0,
-        bockRounds: 0,
-        hochzeiten: 0,
-        solos: 0
-      });
-    });
-
-    sessions.forEach((session) => {
-      session.games.forEach((game) => {
-        game.scores.forEach((score) => {
-          const entry = map.get(score.playerId);
-          if (!entry) return;
-          entry.totalPoints += score.score;
-          if (score.score < 0) {
-            entry.totalPaidIn += Math.abs(score.score);
-          }
-          entry.totalGames += 1;
-          if (score.isWinner) entry.wins += 1;
-          if (game.meta.isBockrunde) entry.bockRounds += 1;
-          if (game.meta.gewonnenVon === "Hochzeit" && game.meta.hochzeitPlayerId === score.playerId) {
-            entry.hochzeiten += 1;
-          }
-          if (game.meta.gewonnenVon === "Solo" && game.meta.soloPlayerId === score.playerId) {
-            entry.solos += 1;
-          }
-        });
-      });
-    });
-
-    return Array.from(map.values())
-      .map((entry) => ({
-        ...entry,
-        winRate: entry.totalGames > 0 ? Math.round((entry.wins / entry.totalGames) * 100) : 0
-      }))
-      .sort((left, right) => right.totalPoints - left.totalPoints || left.name.localeCompare(right.name));
-  }, [players, sessions]);
+  const stats = useMemo<PlayerStats[]>(() => buildPlayerStats(players, sessions), [players, sessions]);
 
   const statsByWins = useMemo(
     () => [...stats].sort((left, right) => right.wins - left.wins || right.winRate - left.winRate),
@@ -254,55 +342,43 @@ function App() {
     [stats]
   );
 
-  const overviewStats = useMemo(() => {
-    const bockRounds = sessions.reduce(
-      (sum, session) => sum + session.games.filter((game) => game.meta.isBockrunde).length,
-      0
-    );
-    const hochzeiten = sessions.reduce(
-      (sum, session) => sum + session.games.filter((game) => game.meta.gewonnenVon === "Hochzeit").length,
-      0
-    );
-    const solos = sessions.reduce(
-      (sum, session) => sum + session.games.filter((game) => game.meta.gewonnenVon === "Solo").length,
-      0
-    );
-    const totalPaidIn = stats.reduce((sum, player) => sum + player.totalPaidIn, 0);
-
-    return { bockRounds, hochzeiten, solos, totalPaidIn };
-  }, [sessions, stats]);
-
-  const pairStats = useMemo(() => {
-    const pairMap = new Map<string, { names: string[]; games: number }>();
-
-    sessions.forEach((session) => {
-      session.games.forEach((game) => {
-        const gamePlayers = getGamePlayers(session, game)
-          .map((player) => player.name)
-          .sort((left, right) => left.localeCompare(right));
-
-        for (let index = 0; index < gamePlayers.length; index += 1) {
-          for (let inner = index + 1; inner < gamePlayers.length; inner += 1) {
-            const names = [gamePlayers[index], gamePlayers[inner]];
-            const key = names.join("::");
-            const existing = pairMap.get(key);
-
-            if (existing) {
-              existing.games += 1;
-            } else {
-              pairMap.set(key, { names, games: 1 });
-            }
-          }
-        }
-      });
-    });
-
-    return Array.from(pairMap.values()).sort(
-      (left, right) => right.games - left.games || formatPairLabel(left.names).localeCompare(formatPairLabel(right.names))
-    );
-  }, [sessions]);
+  const overviewStats = useMemo(() => buildOverviewStats(sessions, stats), [sessions, stats]);
+  const pairStats = useMemo(() => buildPairStats(sessions), [sessions]);
+  const winningPairStats = useMemo(() => buildOutcomePairStats(sessions, "wins"), [sessions]);
+  const losingPairStats = useMemo(() => buildOutcomePairStats(sessions, "losses"), [sessions]);
+  const sessionStats = useMemo(
+    () => (selectedSession ? buildPlayerStats(selectedSession.players, [selectedSession]) : []),
+    [selectedSession]
+  );
+  const sessionStatsByWins = useMemo(
+    () => [...sessionStats].sort((left, right) => right.wins - left.wins || right.winRate - left.winRate),
+    [sessionStats]
+  );
+  const sessionStatsByPaidIn = useMemo(
+    () =>
+      [...sessionStats].sort(
+        (left, right) => right.totalPaidIn - left.totalPaidIn || left.name.localeCompare(right.name)
+      ),
+    [sessionStats]
+  );
+  const sessionOverviewStats = useMemo(
+    () => (selectedSession ? buildOverviewStats([selectedSession], sessionStats) : null),
+    [selectedSession, sessionStats]
+  );
+  const sessionPairStats = useMemo(
+    () => (selectedSession ? buildPairStats([selectedSession]) : []),
+    [selectedSession]
+  );
+  const sessionPieData = useMemo(
+    () =>
+      sessionStatsByWins
+        .filter((stat) => stat.wins > 0)
+        .map((stat) => ({ name: stat.name, value: stat.wins })),
+    [sessionStatsByWins]
+  );
 
   function resetGameForm() {
+    setEditingGameId(null);
     setSelectedGamePlayers(initialGamePlayers);
     setGewonnenVon("Normal");
     setSiegerPartei("Re");
@@ -321,6 +397,25 @@ function App() {
     resetGameForm();
     const defaults = selectedSession.players.slice(0, 4).map((player) => player.id);
     setSelectedGamePlayers([...defaults, ...Array.from({ length: Math.max(0, 4 - defaults.length) }, () => "")]);
+    setShowAddGame(true);
+  }
+
+  function openEditGameModal(game: Game) {
+    if (!selectedSession) return;
+    resetGameForm();
+    const playerIds = game.scores.map((score) => score.playerId);
+    setEditingGameId(game.id);
+    setSelectedGamePlayers([...playerIds, ...Array.from({ length: Math.max(0, 4 - playerIds.length) }, () => "")]);
+    setGewonnenVon(game.meta.gewonnenVon);
+    setSiegerPartei(game.meta.siegerPartei);
+    setIsBockrunde(game.meta.isBockrunde);
+    setSelectedWinners(game.scores.filter((score) => score.isWinner).map((score) => score.playerId));
+    setPartyPoints(game.meta.partyPoints);
+    setHochzeitPlayerId(game.meta.hochzeitPlayerId);
+    setSoloPlayerId(game.meta.soloPlayerId);
+    setReAnsage(game.meta.reAnsage);
+    setKontraAnsage(game.meta.kontraAnsage);
+    setKommentar(game.meta.kommentar);
     setShowAddGame(true);
   }
 
@@ -422,7 +517,7 @@ function App() {
     }
   }
 
-  async function handleAddGame() {
+  async function handleSaveGame() {
     if (!selectedSession) return;
 
     try {
@@ -448,7 +543,7 @@ function App() {
         return;
       }
 
-      await addGame(selectedSession.id, {
+      const payload = {
         playerIds: cleanedGamePlayers,
         winners: selectedWinners,
         gewonnenVon,
@@ -460,20 +555,16 @@ function App() {
         reAnsage,
         kontraAnsage,
         kommentar
-      });
+      };
+
+      if (editingGameId) {
+        await updateGame(selectedSession.id, editingGameId, payload);
+      } else {
+        await addGame(selectedSession.id, payload);
+      }
 
       setShowAddGame(false);
       resetGameForm();
-      await loadData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Fehler");
-    }
-  }
-
-  async function handleUndo() {
-    if (!selectedSession) return;
-    try {
-      await undoGame(selectedSession.id);
       await loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Fehler");
@@ -665,9 +756,6 @@ function App() {
                 >
                   + Spiel erfassen
                 </button>
-                <button className="secondary-btn" onClick={handleUndo}>
-                  Rueckgaengig
-                </button>
                 <button
                   className="secondary-btn"
                   onClick={handleEndSession}
@@ -696,6 +784,154 @@ function App() {
               </div>
             </section>
 
+            {sessionOverviewStats && (
+              <section className="session-stats-section">
+                <div className="page-header section-header">
+                  <div>
+                    <h2>Tagesstatistik</h2>
+                    <p>Die gleiche Sicht wie in der Gesamtstatistik, aber nur fuer diese Spielrunde.</p>
+                  </div>
+                </div>
+
+                <div className="stats-grid compact-stats-grid">
+                  <div className="stat-card compact-stat-card">
+                    <div className="stat-kicker">Spiele</div>
+                    <div className="stat-value">{selectedSession.games.length}</div>
+                    <div className="stat-meta">
+                      <span>{selectedSession.players.length} Spieler in der Runde</span>
+                    </div>
+                  </div>
+                  <div className="stat-card compact-stat-card">
+                    <div className="stat-kicker">Bockrunden</div>
+                    <div className="stat-value">{sessionOverviewStats.bockRounds}</div>
+                    <div className="stat-meta">
+                      <span>an diesem Abend</span>
+                    </div>
+                  </div>
+                  <div className="stat-card compact-stat-card">
+                    <div className="stat-kicker">Hochzeiten</div>
+                    <div className="stat-value">{sessionOverviewStats.hochzeiten}</div>
+                    <div className="stat-meta">
+                      <span>an diesem Abend</span>
+                    </div>
+                  </div>
+                  <div className="stat-card compact-stat-card">
+                    <div className="stat-kicker">Einzahlungen</div>
+                    <div className="stat-value">{formatEuroAmount(sessionOverviewStats.totalPaidIn)}</div>
+                    <div className="stat-meta">
+                      <span>{sessionOverviewStats.totalPaidIn} Punkte insgesamt</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="charts-grid">
+                  <div className="chart-card">
+                    <h3>Siege in dieser Runde</h3>
+                    <div className="chart-wrap">
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart
+                          data={sessionStatsByWins}
+                          margin={{ top: 28, right: 12, left: 0, bottom: 0 }}
+                        >
+                          <XAxis dataKey="name" stroke="#94a3b8" />
+                          <YAxis stroke="#94a3b8" />
+                          <Tooltip />
+                          <Bar dataKey="wins" fill="#e6b93d" radius={[8, 8, 0, 0]}>
+                            <LabelList dataKey="wins" position="top" offset={10} fill="#ecf2ff" fontSize={12} />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="chart-card">
+                    <h3>Siegesverteilung der Runde</h3>
+                    <div className="chart-wrap">
+                      <ResponsiveContainer width="100%" height={280}>
+                        <PieChart>
+                          <Pie data={sessionPieData} dataKey="value" nameKey="name" outerRadius={90} label>
+                            {sessionPieData.map((_, index) => (
+                              <Cell key={index} fill={colors[index % colors.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="charts-grid">
+                  <div className="chart-card">
+                    <h3>Einzahlungen in dieser Runde</h3>
+                    <div className="chart-wrap">
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart
+                          data={sessionStatsByPaidIn}
+                          margin={{ top: 28, right: 12, left: 0, bottom: 0 }}
+                        >
+                          <XAxis dataKey="name" stroke="#94a3b8" />
+                          <YAxis stroke="#94a3b8" />
+                          <Tooltip
+                            formatter={(value) =>
+                              typeof value === "number" ? formatEuroAmount(value) : String(value ?? "")
+                            }
+                          />
+                          <Bar dataKey="totalPaidIn" fill="#f87171" radius={[8, 8, 0, 0]}>
+                            <LabelList
+                              dataKey="totalPaidIn"
+                              position="top"
+                              offset={10}
+                              fill="#ecf2ff"
+                              fontSize={12}
+                              formatter={(value) =>
+                                typeof value === "number" ? formatEuroAmount(value) : String(value ?? "")
+                              }
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="chart-card">
+                    <h3>Meist gespielte Paare der Runde</h3>
+                    <div className="list-card">
+                      {sessionPairStats.length === 0 ? (
+                        <p className="empty-text">Noch keine gemeinsamen Spiele in dieser Runde erfasst.</p>
+                      ) : (
+                        sessionPairStats.slice(0, 8).map((pair) => (
+                          <div key={pair.names.join("::")} className="rank-row">
+                            <span>{formatPairLabel(pair.names)}</span>
+                            <strong>{pair.games} Spiele</strong>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="stats-grid">
+                  {sessionStatsByWins.map((player) => (
+                    <div key={player.id} className="stat-card">
+                      <div className="stat-name">{player.name}</div>
+                      <div className="stat-value">{player.wins}</div>
+                      <div className="stat-meta stat-meta-stacked">
+                        <span>{player.winRate}% Siegquote</span>
+                        <span>{player.totalGames} Spiele</span>
+                        <span>{formatEuroAmount(player.totalPaidIn)} eingezahlt</span>
+                        <span>{player.bockRounds} Bockrunden</span>
+                        <span>{player.hochzeiten} Hochzeiten</span>
+                        <span>{player.solos} Soli</span>
+                        <span>{player.totalPoints} Punkte netto</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <div className="table-card">
               <table>
                 <thead>
@@ -709,7 +945,7 @@ function App() {
                 </thead>
                 <tbody>
                   {selectedSession.games.map((game, index) => (
-                    <tr key={game.id}>
+                    <tr key={game.id} className="interactive-row" onClick={() => openEditGameModal(game)}>
                       <td>{index + 1}</td>
                       <td>
                         <div className="mini-meta">
@@ -762,7 +998,7 @@ function App() {
 
             <div className="history-grid">
               {selectedSession.games.map((game, index) => (
-                <div className="history-card" key={game.id}>
+                <div className="history-card interactive-card" key={game.id} onClick={() => openEditGameModal(game)}>
                   <div className="history-head">
                     <strong>Spiel {index + 1}</strong>
                     <span>{game.meta.siegerPartei}</span>
@@ -841,6 +1077,20 @@ function App() {
 
             <div className="stats-grid compact-stats-grid">
               <div className="stat-card compact-stat-card">
+                <div className="stat-kicker">Spiele</div>
+                <div className="stat-value">{overviewStats.totalGames}</div>
+                <div className="stat-meta">
+                  <span>gesamt erfasst</span>
+                </div>
+              </div>
+              <div className="stat-card compact-stat-card">
+                <div className="stat-kicker">Spielrunden</div>
+                <div className="stat-value">{overviewStats.totalSessions}</div>
+                <div className="stat-meta">
+                  <span>gesamt gespielt</span>
+                </div>
+              </div>
+              <div className="stat-card compact-stat-card">
                 <div className="stat-kicker">Bockrunden</div>
                 <div className="stat-value">{overviewStats.bockRounds}</div>
                 <div className="stat-meta">
@@ -875,11 +1125,13 @@ function App() {
                 <h3>Siege pro Spieler</h3>
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={statsByWins}>
+                    <BarChart data={statsByWins} margin={{ top: 28, right: 12, left: 0, bottom: 0 }}>
                       <XAxis dataKey="name" stroke="#94a3b8" />
                       <YAxis stroke="#94a3b8" />
                       <Tooltip />
-                      <Bar dataKey="wins" fill="#e6b93d" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="wins" fill="#e6b93d" radius={[8, 8, 0, 0]}>
+                        <LabelList dataKey="wins" position="top" offset={10} fill="#ecf2ff" fontSize={12} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -908,7 +1160,7 @@ function App() {
                 <h3>Einzahlungen pro Spieler</h3>
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={statsByPaidIn}>
+                    <BarChart data={statsByPaidIn} margin={{ top: 28, right: 12, left: 0, bottom: 0 }}>
                       <XAxis dataKey="name" stroke="#94a3b8" />
                       <YAxis stroke="#94a3b8" />
                       <Tooltip
@@ -916,7 +1168,18 @@ function App() {
                           typeof value === "number" ? formatEuroAmount(value) : String(value ?? "")
                         }
                       />
-                      <Bar dataKey="totalPaidIn" fill="#f87171" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="totalPaidIn" fill="#f87171" radius={[8, 8, 0, 0]}>
+                        <LabelList
+                          dataKey="totalPaidIn"
+                          position="top"
+                          offset={10}
+                          fill="#ecf2ff"
+                          fontSize={12}
+                          formatter={(value) =>
+                            typeof value === "number" ? formatEuroAmount(value) : String(value ?? "")
+                          }
+                        />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -932,6 +1195,40 @@ function App() {
                       <div key={pair.names.join("::")} className="rank-row">
                         <span>{formatPairLabel(pair.names)}</span>
                         <strong>{pair.games} Spiele</strong>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="charts-grid">
+              <div className="chart-card">
+                <h3>Erfolgreichste Paare</h3>
+                <div className="list-card">
+                  {winningPairStats.length === 0 ? (
+                    <p className="empty-text">Noch keine Sieger-Paare erfasst.</p>
+                  ) : (
+                    winningPairStats.slice(0, 8).map((pair) => (
+                      <div key={`win-${pair.names.join("::")}`} className="rank-row">
+                        <span>{formatPairLabel(pair.names)}</span>
+                        <strong>{pair.games} Siege</strong>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="chart-card">
+                <h3>Haeufigste Verlierer-Paare</h3>
+                <div className="list-card">
+                  {losingPairStats.length === 0 ? (
+                    <p className="empty-text">Noch keine Verlierer-Paare erfasst.</p>
+                  ) : (
+                    losingPairStats.slice(0, 8).map((pair) => (
+                      <div key={`loss-${pair.names.join("::")}`} className="rank-row">
+                        <span>{formatPairLabel(pair.names)}</span>
+                        <strong>{pair.games} Niederlagen</strong>
                       </div>
                     ))
                   )}
@@ -1080,8 +1377,10 @@ function App() {
       {isAuthenticated && showAddGame && selectedSession && (
         <div className="modal-overlay">
           <div className="modal-card modal-card-lg">
-            <h2>Spiel erfassen</h2>
-            <p>Waehle zuerst die 4 Spieler am Tisch aus. Alle weiteren Angaben beziehen sich nur auf diese Vier.</p>
+            <h2>{editingGameId ? "Spiel bearbeiten" : "Spiel erfassen"}</h2>
+            <p>
+              Waehle zuerst die 4 Spieler am Tisch aus. Alle weiteren Angaben beziehen sich nur auf diese Vier.
+            </p>
 
             <div className="section-block">
               <label className="field-label">Wer spielt diese Partie?</label>
@@ -1371,8 +1670,8 @@ function App() {
               >
                 Abbrechen
               </button>
-              <button className="primary-btn" onClick={handleAddGame}>
-                Speichern
+              <button className="primary-btn" onClick={handleSaveGame}>
+                {editingGameId ? "Aenderungen speichern" : "Speichern"}
               </button>
             </div>
           </div>

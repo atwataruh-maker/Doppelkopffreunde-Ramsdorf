@@ -100,12 +100,27 @@ export async function addGame(
   return handleResponse<{ ok: true }>(response);
 }
 
-export async function undoGame(sessionId: string) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/undo`, {
+export async function updateGame(
+  sessionId: string,
+  gameId: string,
+  payload: {
+    playerIds: string[];
+    winners: string[];
+    gewonnenVon: Spieltyp;
+    siegerPartei: SiegerPartei;
+    isBockrunde: boolean;
+    partyPoints: number;
+    hochzeitPlayerId: string | null;
+    soloPlayerId: string | null;
+    reAnsage: string;
+    kontraAnsage: string;
+    kommentar: string;
+  }
+) {
+  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/games/${gameId}`, {
     method: "POST",
-    headers: {
-      "x-app-password": getPassword()
-    }
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
   });
   return handleResponse<{ ok: true }>(response);
 }

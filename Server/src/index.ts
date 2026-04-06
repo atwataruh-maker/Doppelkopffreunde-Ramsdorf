@@ -196,6 +196,86 @@ function calculateLossScores(
   }));
 }
 
+function validateGamePayload(sessionId: string, parsed: ReturnType<typeof addGameSchema.parse>) {
+  if (parsed.gewonnenVon === "Solo" && parsed.siegerPartei !== "Solo") {
+    throw new Error("Bei Spieltyp Solo muss die Siegerpartei Solo sein.");
+  }
+
+  if (parsed.gewonnenVon !== "Solo" && parsed.siegerPartei === "Solo") {
+    throw new Error("Solo als Siegerpartei ist nur bei Spieltyp Solo erlaubt.");
+  }
+
+  if (parsed.gewonnenVon === "Hochzeit" && !parsed.hochzeitPlayerId) {
+    throw new Error("Bitte den Hochzeit-Spieler auswaehlen.");
+  }
+
+  if (parsed.gewonnenVon !== "Hochzeit" && parsed.hochzeitPlayerId) {
+    throw new Error("Hochzeit-Spieler darf nur bei Hochzeit gesetzt sein.");
+  }
+
+  if (parsed.gewonnenVon === "Solo" && !parsed.soloPlayerId) {
+    throw new Error("Bitte den Solo-Spieler auswaehlen.");
+  }
+
+  if (parsed.gewonnenVon !== "Solo" && parsed.soloPlayerId) {
+    throw new Error("Solo-Spieler darf nur bei Solo gesetzt sein.");
+  }
+
+  assertUniqueIds(parsed.playerIds, "Es muessen 4 verschiedene Spieler am Tisch sitzen.");
+  assertUniqueIds(parsed.winners, "Ein Gewinner darf nur einmal markiert werden.");
+
+  const session = db
+    .prepare(`
+      SELECT id, active
+      FROM sessions
+      WHERE id = ?
+    `)
+    .get(sessionId) as { id: string; active: number } | undefined;
+
+  if (!session) {
+    throw new Error("Runde nicht gefunden.");
+  }
+
+  const sessionPlayers = db
+    .prepare(`
+      SELECT gp.id, gp.name
+      FROM session_players sp
+      JOIN global_players gp ON gp.id = sp.player_id
+      WHERE sp.session_id = ?
+    `)
+    .all(sessionId) as Player[];
+
+  const validPlayerIds = new Set(sessionPlayers.map((player) => player.id));
+
+  if (parsed.playerIds.some((playerId) => !validPlayerIds.has(playerId))) {
+    throw new Error("Es sind ungueltige Spieler in der Tischbesetzung.");
+  }
+
+  if (parsed.winners.some((playerId) => !parsed.playerIds.includes(playerId))) {
+    throw new Error("Gewinner muessen Teil der 4 Spieler am Tisch sein.");
+  }
+
+  if (parsed.hochzeitPlayerId && !parsed.playerIds.includes(parsed.hochzeitPlayerId)) {
+    throw new Error("Der Hochzeit-Spieler muss am Tisch sitzen.");
+  }
+
+  if (parsed.soloPlayerId && !parsed.playerIds.includes(parsed.soloPlayerId)) {
+    throw new Error("Der Solo-Spieler muss am Tisch sitzen.");
+  }
+
+  return {
+    session,
+    calculatedScores: calculateLossScores(
+      parsed.playerIds,
+      parsed.winners,
+      parsed.partyPoints,
+      parsed.gewonnenVon,
+      parsed.hochzeitPlayerId,
+      parsed.soloPlayerId
+    )
+  };
+}
+
 function getPlayers(): Player[] {
   return db
     .prepare(`
@@ -398,85 +478,11 @@ app.post("/api/sessions/:id/games", writeLimiter, (req, res, next) => {
   try {
     const sessionId = String(req.params.id);
     const parsed = addGameSchema.parse(req.body);
-
-    assertUniqueIds(parsed.playerIds, "Es muessen 4 verschiedene Spieler am Tisch sitzen.");
-    assertUniqueIds(parsed.winners, "Ein Gewinner darf nur einmal markiert werden.");
-
-    if (parsed.gewonnenVon === "Solo" && parsed.siegerPartei !== "Solo") {
-      return res.status(400).json({ error: "Bei Spieltyp Solo muss die Siegerpartei Solo sein." });
-    }
-
-    if (parsed.gewonnenVon !== "Solo" && parsed.siegerPartei === "Solo") {
-      return res.status(400).json({ error: "Solo als Siegerpartei ist nur bei Spieltyp Solo erlaubt." });
-    }
-
-    if (parsed.gewonnenVon === "Hochzeit" && !parsed.hochzeitPlayerId) {
-      return res.status(400).json({ error: "Bitte den Hochzeit-Spieler auswaehlen." });
-    }
-
-    if (parsed.gewonnenVon !== "Hochzeit" && parsed.hochzeitPlayerId) {
-      return res.status(400).json({ error: "Hochzeit-Spieler darf nur bei Hochzeit gesetzt sein." });
-    }
-
-    if (parsed.gewonnenVon === "Solo" && !parsed.soloPlayerId) {
-      return res.status(400).json({ error: "Bitte den Solo-Spieler auswaehlen." });
-    }
-
-    if (parsed.gewonnenVon !== "Solo" && parsed.soloPlayerId) {
-      return res.status(400).json({ error: "Solo-Spieler darf nur bei Solo gesetzt sein." });
-    }
-
-    const session = db
-      .prepare(`
-        SELECT id, active
-        FROM sessions
-        WHERE id = ?
-      `)
-      .get(sessionId) as { id: string; active: number } | undefined;
-
-    if (!session) {
-      return res.status(404).json({ error: "Runde nicht gefunden." });
-    }
+    const { session, calculatedScores } = validateGamePayload(sessionId, parsed);
 
     if (session.active !== 1) {
       return res.status(400).json({ error: "Runde ist bereits beendet." });
     }
-
-    const sessionPlayers = db
-      .prepare(`
-        SELECT gp.id, gp.name
-        FROM session_players sp
-        JOIN global_players gp ON gp.id = sp.player_id
-        WHERE sp.session_id = ?
-      `)
-      .all(sessionId) as Player[];
-
-    const validPlayerIds = new Set(sessionPlayers.map((player) => player.id));
-
-    if (parsed.playerIds.some((playerId) => !validPlayerIds.has(playerId))) {
-      return res.status(400).json({ error: "Es sind ungueltige Spieler in der Tischbesetzung." });
-    }
-
-    if (parsed.winners.some((playerId) => !parsed.playerIds.includes(playerId))) {
-      return res.status(400).json({ error: "Gewinner muessen Teil der 4 Spieler am Tisch sein." });
-    }
-
-    if (parsed.hochzeitPlayerId && !parsed.playerIds.includes(parsed.hochzeitPlayerId)) {
-      return res.status(400).json({ error: "Der Hochzeit-Spieler muss am Tisch sitzen." });
-    }
-
-    if (parsed.soloPlayerId && !parsed.playerIds.includes(parsed.soloPlayerId)) {
-      return res.status(400).json({ error: "Der Solo-Spieler muss am Tisch sitzen." });
-    }
-
-    const calculatedScores = calculateLossScores(
-      parsed.playerIds,
-      parsed.winners,
-      parsed.partyPoints,
-      parsed.gewonnenVon,
-      parsed.hochzeitPlayerId,
-      parsed.soloPlayerId
-    );
 
     const gameId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -535,6 +541,88 @@ app.post("/api/sessions/:id/games", writeLimiter, (req, res, next) => {
     audit("game.create", sessionId, req, parsed);
     res.status(201).json({ ok: true });
   } catch (error) {
+    if (error instanceof Error && error.message === "Runde nicht gefunden.") {
+      return res.status(404).json({ error: error.message });
+    }
+    next(error);
+  }
+});
+
+app.post("/api/sessions/:sessionId/games/:gameId", writeLimiter, (req, res, next) => {
+  try {
+    const sessionId = String(req.params.sessionId);
+    const gameId = String(req.params.gameId);
+    const parsed = addGameSchema.parse(req.body);
+
+    const game = db
+      .prepare(`
+        SELECT id
+        FROM games
+        WHERE id = ? AND session_id = ?
+      `)
+      .get(gameId, sessionId) as { id: string } | undefined;
+
+    if (!game) {
+      return res.status(404).json({ error: "Spiel nicht gefunden." });
+    }
+
+    const { calculatedScores } = validateGamePayload(sessionId, parsed);
+
+    const updateGame = db.prepare(`
+      UPDATE games
+      SET
+        gewonnen_von = ?,
+        sieger_partei = ?,
+        is_bockrunde = ?,
+        party_points = ?,
+        hochzeit_player_id = ?,
+        solo_player_id = ?,
+        re_ansage = ?,
+        kontra_ansage = ?,
+        kommentar = ?
+      WHERE id = ? AND session_id = ?
+    `);
+
+    const insertScore = db.prepare(`
+      INSERT INTO game_scores (id, game_id, player_id, score, is_winner)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const tx = db.transaction(() => {
+      updateGame.run(
+        parsed.gewonnenVon,
+        parsed.siegerPartei,
+        parsed.isBockrunde ? 1 : 0,
+        parsed.partyPoints,
+        parsed.hochzeitPlayerId,
+        parsed.soloPlayerId,
+        parsed.reAnsage,
+        parsed.kontraAnsage,
+        parsed.kommentar,
+        gameId,
+        sessionId
+      );
+
+      db.prepare(`DELETE FROM game_scores WHERE game_id = ?`).run(gameId);
+
+      calculatedScores.forEach((score) => {
+        insertScore.run(
+          crypto.randomUUID(),
+          gameId,
+          score.playerId,
+          score.score,
+          score.isWinner ? 1 : 0
+        );
+      });
+    });
+
+    tx();
+    audit("game.update", sessionId, req, { gameId, ...parsed });
+    res.json({ ok: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Runde nicht gefunden.") {
+      return res.status(404).json({ error: error.message });
+    }
     next(error);
   }
 });

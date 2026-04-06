@@ -150,6 +150,10 @@ button {
   flex-wrap: wrap;
 }
 
+.section-header {
+  margin-bottom: 20px;
+}
+
 .page-header h1,
 .detail-header h1,
 .login-card h1 {
@@ -343,6 +347,15 @@ button {
   overflow: hidden;
 }
 
+.interactive-row {
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.interactive-row:hover {
+  background: rgba(230, 185, 61, 0.08);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -398,6 +411,10 @@ td:first-child {
 
 .session-roster-card {
   margin-bottom: 20px;
+}
+
+.session-stats-section {
+  margin-bottom: 24px;
 }
 
 .player-pool-head {
@@ -496,6 +513,16 @@ td:first-child {
 
 .rank-row strong {
   color: var(--primary);
+}
+
+.interactive-card {
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.interactive-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
 }
 
 .error-text {
