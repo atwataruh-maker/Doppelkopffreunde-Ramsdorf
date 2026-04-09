@@ -23,6 +23,7 @@ import {
   undoGame
 } from "./api";
 import { Game, Player, PlayerStats, Session, SiegerPartei, Spieltyp } from "./types";
+import { exportAllSessions, exportSession } from "./export";
 
 type View = "sessions" | "stats" | "detail";
 
@@ -571,6 +572,14 @@ function App() {
                   + Spieler
                 </button>
                 <button
+                  className="secondary-btn"
+                  onClick={() => exportAllSessions(sessions)}
+                  disabled={sessions.length === 0}
+                  title="Alle Runden als Excel exportieren"
+                >
+                  Excel exportieren
+                </button>
+                <button
                   className="primary-btn"
                   onClick={() => {
                     setSelectedSessionPlayers(["", "", "", ""]);
@@ -667,6 +676,14 @@ function App() {
                 </button>
                 <button className="secondary-btn" onClick={handleUndo}>
                   Rueckgaengig
+                </button>
+                <button
+                  className="secondary-btn"
+                  onClick={() => exportSession(selectedSession)}
+                  disabled={selectedSession.games.length === 0}
+                  title="Diese Runde als Excel exportieren"
+                >
+                  Excel exportieren
                 </button>
                 <button
                   className="secondary-btn"
