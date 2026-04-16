@@ -1,8 +1,9 @@
 # Abhängigkeiten
 node_modules/
 
-# Client Build-Artefakte (werden neu gebaut, nicht eingecheckt)
+# Build-Artefakte (werden neu gebaut, nicht eingecheckt)
 Client/dist/
+Server/dist/
 
 # Laufzeitdaten (SQLite-Datenbank)
 Server/data/

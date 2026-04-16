@@ -10,12 +10,7 @@ import { addGameSchema, createPlayerSchema, createSessionSchema, importSessionSc
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
-const APP_PASSWORD = process.env.APP_PASSWORD || "";
 const NODE_ENV = process.env.NODE_ENV || "development";
-
-if (!APP_PASSWORD || APP_PASSWORD.length < 4) {
-  console.warn("WARNUNG: APP_PASSWORD fehlt oder ist zu kurz. Bitte unbedingt setzen.");
-}
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173,http://localhost:8080")
   .split(",")
@@ -39,7 +34,7 @@ app.use(
       return callback(new Error("Origin nicht erlaubt"));
     },
     methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "x-app-password"]
+    allowedHeaders: ["Content-Type"]
   })
 );
 
