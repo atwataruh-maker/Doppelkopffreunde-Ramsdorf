@@ -6,7 +6,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { db } from "./db";
 import { Player, Session } from "./types";
-import { addGameSchema, createPlayerSchema, createSessionSchema } from "./security";
+import { addGameSchema, createPlayerSchema, createSessionSchema, importSessionSchema } from "./security";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -86,19 +86,6 @@ function audit(
     getClientIp(req),
     details ? JSON.stringify(details) : null
   );
-}
-
-function requireAppPassword(req: Request, res: Response, next: NextFunction) {
-  if (req.path === "/api/health") {
-    return next();
-  }
-
-  const providedPassword = req.header("x-app-password");
-  if (!APP_PASSWORD || providedPassword !== APP_PASSWORD) {
-    return res.status(401).json({ error: "Nicht autorisiert." });
-  }
-
-  next();
 }
 
 function assertUniqueIds(values: string[], errorMessage: string) {
@@ -299,7 +286,6 @@ function getSessions(): Session[] {
 }
 
 app.use("/api", apiLimiter);
-app.use(requireAppPassword);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, env: NODE_ENV });
@@ -534,6 +520,95 @@ app.post("/api/sessions/:id/games", writeLimiter, (req, res, next) => {
     tx();
     audit("game.create", sessionId, req, parsed);
     res.status(201).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/sessions/import", writeLimiter, (req, res, next) => {
+  try {
+    const parsed = importSessionSchema.parse(req.body);
+
+    // Alle Spielernamen zu IDs auflösen
+    const playerIdByName = new Map<string, string>();
+    const unknownNames: string[] = [];
+
+    const uniqueNames = Array.from(new Set([
+      ...parsed.playerNames,
+      ...parsed.games.flatMap((g) => [g.soloPlayerName, g.hochzeitPlayerName].filter(Boolean) as string[]),
+      ...parsed.games.flatMap((g) => g.scores.map((s) => s.playerName))
+    ]));
+
+    for (const name of uniqueNames) {
+      const row = db
+        .prepare(`SELECT id FROM global_players WHERE name = ? COLLATE NOCASE`)
+        .get(name) as { id: string } | undefined;
+      if (row) {
+        playerIdByName.set(name.toLowerCase(), row.id);
+      } else {
+        unknownNames.push(name);
+      }
+    }
+
+    if (unknownNames.length > 0) {
+      return res.status(400).json({
+        error: `Folgende Spieler existieren nicht und muessen zuerst angelegt werden: ${unknownNames.join(", ")}`
+      });
+    }
+
+    const resolveId = (name: string | null) =>
+      name ? (playerIdByName.get(name.toLowerCase()) ?? null) : null;
+
+    const sessionId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const orderedPlayerIds = parsed.playerNames.map((n) => playerIdByName.get(n.toLowerCase())!);
+    const title = buildSessionTitle(parsed.playerNames);
+
+    const insertSession = db.prepare(`
+      INSERT INTO sessions (id, title, date, active, created_at)
+      VALUES (?, ?, ?, 0, ?)
+    `);
+    const insertSessionPlayer = db.prepare(`
+      INSERT INTO session_players (session_id, player_id, sort_order)
+      VALUES (?, ?, ?)
+    `);
+    const insertGame = db.prepare(`
+      INSERT INTO games (
+        id, session_id, created_at, gewonnen_von, sieger_partei,
+        is_bockrunde, party_points, hochzeit_player_id, solo_player_id,
+        re_ansage, kontra_ansage, kommentar
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertScore = db.prepare(`
+      INSERT INTO game_scores (id, game_id, player_id, score, is_winner)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const tx = db.transaction(() => {
+      insertSession.run(sessionId, title, parsed.date, now);
+      orderedPlayerIds.forEach((playerId, index) => {
+        insertSessionPlayer.run(sessionId, playerId, index);
+      });
+
+      parsed.games.forEach((game) => {
+        const gameId = crypto.randomUUID();
+        insertGame.run(
+          gameId, sessionId, now,
+          game.gewonnenVon, game.siegerPartei,
+          game.isBockrunde ? 1 : 0, game.partyPoints,
+          resolveId(game.hochzeitPlayerName), resolveId(game.soloPlayerName),
+          game.reAnsage, game.kontraAnsage, game.kommentar
+        );
+        game.scores.forEach((s) => {
+          const playerId = playerIdByName.get(s.playerName.toLowerCase())!;
+          insertScore.run(crypto.randomUUID(), gameId, playerId, s.score, s.score >= 0 ? 1 : 0);
+        });
+      });
+    });
+
+    tx();
+    audit("session.import", sessionId, req, { playerNames: parsed.playerNames, gameCount: parsed.games.length });
+    res.status(201).json({ ok: true, sessionId });
   } catch (error) {
     next(error);
   }

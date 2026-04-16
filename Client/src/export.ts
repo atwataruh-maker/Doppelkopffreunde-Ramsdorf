@@ -63,7 +63,8 @@ function buildSessionSheet(session: Session): XLSX.WorkSheet {
       game.meta.kommentar || "",
       ...players.map((player) => {
         const score = game.scores.find((s) => s.playerId === player.id);
-        return score?.score ?? 0;
+        // leere Zelle = nicht am Tisch; 0 = Gewinner (am Tisch, kein Verlust)
+        return score !== undefined ? score.score : "";
       })
     ];
     rows.push(row);

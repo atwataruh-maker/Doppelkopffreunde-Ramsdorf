@@ -1,0 +1,24 @@
+# Abhängigkeiten
+node_modules/
+
+# Client Build-Artefakte (werden neu gebaut, nicht eingecheckt)
+Client/dist/
+
+# Laufzeitdaten (SQLite-Datenbank)
+Server/data/
+
+# Umgebungsvariablen
+.env
+!.env.example
+!.env.docker.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript Build-Info
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
