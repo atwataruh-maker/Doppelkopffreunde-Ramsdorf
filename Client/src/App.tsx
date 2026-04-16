@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -24,6 +24,7 @@ import {
 } from "./api";
 import { Game, Player, PlayerStats, Session, SiegerPartei, Spieltyp } from "./types";
 import { exportAllSessions, exportSession } from "./export";
+import { importSession, parseExcelFile } from "./import";
 
 type View = "sessions" | "stats" | "detail";
 
@@ -139,6 +140,8 @@ function App() {
   const [reAnsage, setReAnsage] = useState("");
   const [kontraAnsage, setKontraAnsage] = useState("");
   const [kommentar, setKommentar] = useState("");
+  const [importing, setImporting] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) || null;
   const selectedGamePlayerObjects = useMemo(
@@ -491,6 +494,31 @@ function App() {
     }
   }
 
+  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    // Input zurücksetzen, damit dieselbe Datei erneut gewählt werden kann
+    event.target.value = "";
+
+    setImporting(true);
+    try {
+      const sessions = await parseExcelFile(file);
+      if (sessions.length === 0) {
+        alert("Keine gültigen Runden in der Datei gefunden.");
+        return;
+      }
+      for (const session of sessions) {
+        await importSession(session);
+      }
+      await loadData();
+      alert(`${sessions.length} Runde(n) erfolgreich importiert.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Import fehlgeschlagen.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const pieData = statsByWins
     .filter((stat) => stat.wins > 0)
     .map((stat) => ({ name: stat.name, value: stat.wins }));
@@ -578,6 +606,21 @@ function App() {
                   title="Alle Runden als Excel exportieren"
                 >
                   Excel exportieren
+                </button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  style={{ display: "none" }}
+                  onChange={handleImportFile}
+                />
+                <button
+                  className="secondary-btn"
+                  onClick={() => importFileRef.current?.click()}
+                  disabled={importing}
+                  title="Runden aus Excel importieren"
+                >
+                  {importing ? "Importiere..." : "Excel importieren"}
                 </button>
                 <button
                   className="primary-btn"
