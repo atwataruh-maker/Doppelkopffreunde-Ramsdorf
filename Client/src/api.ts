@@ -1,6 +1,7 @@
 import { Player, Session, SiegerPartei, Spieltyp } from "./types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+// "" (Docker/nginx) → same-origin; undefined (dev, nicht gesetzt) → localhost
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
 function getPassword() {
   return sessionStorage.getItem("appPassword") || "";
