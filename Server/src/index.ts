@@ -88,19 +88,6 @@ function audit(
   );
 }
 
-function requireAppPassword(req: Request, res: Response, next: NextFunction) {
-  if (req.path === "/api/health") {
-    return next();
-  }
-
-  const providedPassword = req.header("x-app-password");
-  if (!APP_PASSWORD || providedPassword !== APP_PASSWORD) {
-    return res.status(401).json({ error: "Nicht autorisiert." });
-  }
-
-  next();
-}
-
 function assertUniqueIds(values: string[], errorMessage: string) {
   if (new Set(values).size !== values.length) {
     throw new Error(errorMessage);
@@ -299,7 +286,6 @@ function getSessions(): Session[] {
 }
 
 app.use("/api", apiLimiter);
-app.use(requireAppPassword);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, env: NODE_ENV });

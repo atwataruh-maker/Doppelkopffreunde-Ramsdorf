@@ -14,7 +14,6 @@ import {
 import "./index.css";
 import {
   addGame,
-  checkAuth,
   createPlayer,
   createSession,
   endSession,
@@ -118,9 +117,6 @@ function App() {
   const [view, setView] = useState<View>("sessions");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
   const [error, setError] = useState("");
 
   const [selectedSessionPlayers, setSelectedSessionPlayers] = useState<string[]>([]);
@@ -166,25 +162,8 @@ function App() {
     }
   }
 
-  async function verifyStoredPassword() {
-    try {
-      const ok = await checkAuth();
-      setIsAuthenticated(ok);
-      setAuthChecked(true);
-      if (ok) {
-        await loadData();
-      } else {
-        setLoading(false);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler bei der Anmeldung");
-      setAuthChecked(true);
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    verifyStoredPassword();
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -369,32 +348,6 @@ function App() {
     });
   }
 
-  async function handleLogin() {
-    try {
-      sessionStorage.setItem("appPassword", passwordInput);
-      const ok = await checkAuth();
-      if (!ok) {
-        setError("Passwort falsch.");
-        setIsAuthenticated(false);
-        return;
-      }
-
-      setError("");
-      setIsAuthenticated(true);
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Anmeldung fehlgeschlagen");
-    }
-  }
-
-  function handleLogout() {
-    sessionStorage.removeItem("appPassword");
-    setIsAuthenticated(false);
-    setSessions([]);
-    setPlayers([]);
-    setSelectedSessionId(null);
-  }
-
   async function handleCreatePlayer() {
     try {
       await createPlayer(newPlayerName);
@@ -539,50 +492,23 @@ function App() {
           <button
             className={view === "sessions" ? "nav-btn active" : "nav-btn"}
             onClick={() => setView("sessions")}
-            disabled={!isAuthenticated}
           >
             Runden
           </button>
           <button
             className={view === "stats" ? "nav-btn active" : "nav-btn"}
             onClick={() => setView("stats")}
-            disabled={!isAuthenticated}
           >
             Statistik
           </button>
-          {isAuthenticated && (
-            <button className="nav-btn" onClick={handleLogout}>
-              Abmelden
-            </button>
-          )}
         </nav>
       </header>
 
       <main className="container">
-        {!authChecked && <p>Lade...</p>}
+        {loading && <p>Lade Daten...</p>}
+        {error && <p className="error-text">{error}</p>}
 
-        {authChecked && !isAuthenticated && (
-          <div className="login-card">
-            <h1>App-Zugriff</h1>
-            <p>Bitte das gemeinsame Passwort eingeben.</p>
-            <input
-              className="text-input"
-              type="password"
-              value={passwordInput}
-              onChange={(event) => setPasswordInput(event.target.value)}
-              placeholder="Passwort"
-            />
-            <button className="primary-btn" onClick={handleLogin}>
-              Anmelden
-            </button>
-            {error && <p className="error-text">{error}</p>}
-          </div>
-        )}
-
-        {isAuthenticated && loading && <p>Lade Daten...</p>}
-        {isAuthenticated && error && <p className="error-text">{error}</p>}
-
-        {isAuthenticated && !loading && view === "sessions" && (
+        {!loading && view === "sessions" && (
           <>
             <div className="page-header">
               <div>
@@ -695,7 +621,7 @@ function App() {
           </>
         )}
 
-        {isAuthenticated && !loading && view === "detail" && selectedSession && (
+        {!loading && view === "detail" && selectedSession && (
           <>
             <div className="detail-header">
               <div>
@@ -865,7 +791,7 @@ function App() {
           </>
         )}
 
-        {isAuthenticated && !loading && view === "stats" && (
+        {!loading && view === "stats" && (
           <>
             <div className="page-header">
               <div>
@@ -1020,7 +946,7 @@ function App() {
         )}
       </main>
 
-      {isAuthenticated && showPlayerModal && (
+      {showPlayerModal && (
         <div className="modal-overlay">
           <div className="modal-card">
             <h2>Spieler anlegen</h2>
@@ -1053,7 +979,7 @@ function App() {
         </div>
       )}
 
-      {isAuthenticated && showCreate && (
+      {showCreate && (
         <div className="modal-overlay">
           <div className="modal-card modal-card-lg">
             <h2>Neue Runde</h2>
@@ -1137,7 +1063,7 @@ function App() {
         </div>
       )}
 
-      {isAuthenticated && showAddGame && selectedSession && (
+      {showAddGame && selectedSession && (
         <div className="modal-overlay">
           <div className="modal-card modal-card-lg">
             <h2>Spiel erfassen</h2>
