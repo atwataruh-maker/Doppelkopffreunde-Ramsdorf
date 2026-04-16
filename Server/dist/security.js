@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addGameSchema = exports.createSessionSchema = exports.createPlayerSchema = void 0;
+exports.addGameSchema = exports.importSessionSchema = exports.createSessionSchema = exports.createPlayerSchema = void 0;
 const zod_1 = require("zod");
 const playerNameSchema = zod_1.z
     .string()
@@ -15,6 +15,27 @@ exports.createPlayerSchema = zod_1.z.object({
 });
 exports.createSessionSchema = zod_1.z.object({
     playerIds: uuidArray.min(4, "Es muessen mindestens 4 Spieler angegeben werden.")
+});
+const importScoreSchema = zod_1.z.object({
+    playerName: playerNameSchema,
+    score: zod_1.z.number().int().min(-9999).max(9999)
+});
+const importGameSchema = zod_1.z.object({
+    gewonnenVon: zod_1.z.enum(["Normal", "Hochzeit", "Solo"]),
+    siegerPartei: zod_1.z.enum(["Re", "Kontra", "Solo"]),
+    isBockrunde: zod_1.z.boolean(),
+    partyPoints: zod_1.z.number().int().min(1).max(999),
+    soloPlayerName: zod_1.z.string().max(30).nullable().default(null),
+    hochzeitPlayerName: zod_1.z.string().max(30).nullable().default(null),
+    reAnsage: zod_1.z.string().max(50).default(""),
+    kontraAnsage: zod_1.z.string().max(50).default(""),
+    kommentar: zod_1.z.string().max(500).default(""),
+    scores: zod_1.z.array(importScoreSchema).min(1).max(8)
+});
+exports.importSessionSchema = zod_1.z.object({
+    date: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Datum muss im Format YYYY-MM-DD sein."),
+    playerNames: zod_1.z.array(playerNameSchema).min(4).max(20),
+    games: zod_1.z.array(importGameSchema).min(0).max(500)
 });
 exports.addGameSchema = zod_1.z.object({
     playerIds: uuidArray.length(4, "Es muessen genau 4 Spieler fuer das Spiel gesetzt werden."),
