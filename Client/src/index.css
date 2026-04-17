@@ -918,7 +918,7 @@ select.text-input option {
 .points-pos { color: var(--success); font-weight: 700; }
 .points-neg { color: var(--danger); font-weight: 700; }
 
-.charts-grid {
+.session-stats-section .charts-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   margin-bottom: 8px;
 }
@@ -977,4 +977,232 @@ select.text-input option {
   font-size: 1.2rem;
   font-weight: 800;
   color: var(--primary);
+}
+
+.highlight-sub {
+  font-size: 0.75rem;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+.highlight-paid {
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+/* ── Winner Banner (new layout) ───────────────────────────── */
+
+.winner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.winner-score-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.winner-pts-big {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.winner-euro-sub {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.pts-pos { color: var(--success); font-weight: 700; }
+.pts-neg { color: var(--danger);  font-weight: 700; }
+
+/* ── Podium ───────────────────────────────────────────────── */
+
+.podium-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+.podium-card {
+  flex: 1;
+  border-radius: 20px;
+  padding: 16px 14px 18px;
+  text-align: center;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface), var(--surface-strong));
+}
+
+.podium-rank-1 {
+  padding: 28px 16px 22px;
+  border-color: rgba(230, 185, 61, 0.45);
+  background: linear-gradient(160deg, rgba(230, 185, 61, 0.14), rgba(230, 185, 61, 0.03));
+  box-shadow: 0 8px 36px rgba(230, 185, 61, 0.14), inset 0 1px 0 rgba(230, 185, 61, 0.2);
+}
+
+.podium-rank-2 {
+  padding: 20px 14px 18px;
+  border-color: rgba(148, 163, 184, 0.35);
+  background: linear-gradient(160deg, rgba(148, 163, 184, 0.1), transparent);
+}
+
+.podium-rank-3 {
+  padding: 16px 12px 16px;
+  border-color: rgba(180, 120, 60, 0.3);
+  background: linear-gradient(160deg, rgba(180, 120, 60, 0.08), transparent);
+}
+
+.podium-medal {
+  font-size: 1.8rem;
+  margin-bottom: 10px;
+}
+
+.podium-avatar-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.podium-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.podium-rank-1 .podium-avatar {
+  width: 52px;
+  height: 52px;
+  font-size: 1.3rem;
+  background: rgba(230, 185, 61, 0.25);
+}
+
+.podium-rank-2 .podium-avatar {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.podium-rank-3 .podium-avatar {
+  background: rgba(180, 120, 60, 0.2);
+  color: #b4783c;
+}
+
+.podium-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podium-rank-1 .podium-name {
+  font-size: 1.05rem;
+  color: var(--primary);
+}
+
+.podium-pts {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.podium-rank-1 .podium-pts {
+  font-size: 1.4rem;
+}
+
+.podium-euro {
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
+
+.podium-record {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.rec-win  { color: var(--success); font-weight: 600; }
+.rec-loss { color: var(--danger);  font-weight: 600; }
+.rec-sep  { opacity: 0.4; }
+
+/* ── Ranking table column helpers ─────────────────────────── */
+
+.ranking-table .rtcol-name { text-align: left !important; }
+.ranking-table .rtcol-win  { color: var(--success); font-weight: 600; }
+.ranking-table .rtcol-loss { color: var(--danger);  font-weight: 600; }
+.ranking-table .rtcol-streak { font-size: 0.9rem; }
+
+/* ── Winrate bar ──────────────────────────────────────────── */
+
+.winrate-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 90px;
+}
+
+.winrate-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.winrate-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #4ade80, #60a5fa);
+  transition: width 0.4s ease;
+}
+
+.winrate-num {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* ── Full-width standalone chart ──────────────────────────── */
+
+.chart-full {
+  margin-top: 16px;
+}
+
+/* ── Responsive adjustments ───────────────────────────────── */
+
+@media (max-width: 600px) {
+  .podium-wrap {
+    gap: 8px;
+  }
+
+  .podium-name {
+    font-size: 0.78rem;
+  }
+
+  .podium-rank-1 .podium-pts {
+    font-size: 1.1rem;
+  }
+
+  .winrate-wrap {
+    min-width: 60px;
+  }
+
+  .ranking-table th,
+  .ranking-table td {
+    padding: 8px 6px;
+    font-size: 0.8rem;
+  }
 }
