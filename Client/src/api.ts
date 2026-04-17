@@ -1,9 +1,5 @@
 import { Player, Session, SiegerPartei, Spieltyp } from "./types";
 
-// "" (Docker/nginx) → same-origin requests, nginx proxies /api
-// undefined (dev, nicht gesetzt) → localhost
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
-
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const data = await response.json().catch(() => null);
@@ -13,17 +9,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function fetchSessions(): Promise<Session[]> {
-  const response = await fetch(`${API_URL}/api/sessions`);
+  const response = await fetch("/api/sessions");
   return handleResponse<Session[]>(response);
 }
 
 export async function fetchPlayers(): Promise<Player[]> {
-  const response = await fetch(`${API_URL}/api/players`);
+  const response = await fetch("/api/players");
   return handleResponse<Player[]>(response);
 }
 
 export async function createPlayer(name: string) {
-  const response = await fetch(`${API_URL}/api/players`, {
+  const response = await fetch("/api/players", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name })
@@ -32,7 +28,7 @@ export async function createPlayer(name: string) {
 }
 
 export async function createSession(playerIds: string[]) {
-  const response = await fetch(`${API_URL}/api/sessions`, {
+  const response = await fetch("/api/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ playerIds })
@@ -56,7 +52,7 @@ export async function addGame(
     kommentar: string;
   }
 ) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/games`, {
+  const response = await fetch(`/api/sessions/${sessionId}/games`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -65,16 +61,12 @@ export async function addGame(
 }
 
 export async function undoGame(sessionId: string) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/undo`, {
-    method: "POST"
-  });
+  const response = await fetch(`/api/sessions/${sessionId}/undo`, { method: "POST" });
   return handleResponse<{ ok: true }>(response);
 }
 
 export async function endSession(sessionId: string) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/end`, {
-    method: "POST"
-  });
+  const response = await fetch(`/api/sessions/${sessionId}/end`, { method: "POST" });
   return handleResponse<{ ok: true }>(response);
 }
 
@@ -95,7 +87,7 @@ export async function editGame(
     kommentar: string;
   }
 ) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/games/${gameId}/edit`, {
+  const response = await fetch(`/api/sessions/${sessionId}/games/${gameId}/edit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -104,6 +96,6 @@ export async function editGame(
 }
 
 export async function clearAllSessions() {
-  const response = await fetch(`${API_URL}/api/sessions`, { method: "DELETE" });
+  const response = await fetch("/api/sessions", { method: "DELETE" });
   return handleResponse<{ ok: true }>(response);
 }
