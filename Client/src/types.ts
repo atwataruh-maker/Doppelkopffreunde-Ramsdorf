@@ -1,54 +1,81 @@
-export type Player = {
-  id: string;
-  name: string;
-};
+export const FAMILY_MEMBERS = ["Matteo", "Klara", "Mama", "Papa"] as const;
+export type FamilyMember = (typeof FAMILY_MEMBERS)[number];
 
-export type GameScore = {
-  playerId: string;
-  score: number;
-  isWinner: boolean;
-};
+export const CATEGORIES = [
+  "Pasta & Nudeln",
+  "Fleisch",
+  "Fisch & Meeresfrüchte",
+  "Vegetarisch",
+  "Suppen & Eintöpfe",
+  "Salate",
+  "Backen",
+  "Sonstiges"
+] as const;
+export type Category = (typeof CATEGORIES)[number];
 
-export type Spieltyp = "Normal" | "Hochzeit" | "Solo";
-export type SiegerPartei = "Re" | "Kontra" | "Solo";
+export type MemberRatings = Partial<Record<FamilyMember, number>>;
 
-export type GameMeta = {
-  gewonnenVon: Spieltyp;
-  siegerPartei: SiegerPartei;
-  isBockrunde: boolean;
-  partyPoints: number;
-  hochzeitPlayerId: string | null;
-  soloPlayerId: string | null;
-  reAnsage: string;
-  kontraAnsage: string;
-  kommentar: string;
-};
-
-export type Game = {
-  id: string;
-  createdAt: string;
-  scores: GameScore[];
-  meta: GameMeta;
-};
-
-export type Session = {
+export type Recipe = {
   id: string;
   title: string;
-  date: string;
-  active: boolean;
-  players: Player[];
-  games: Game[];
+  link: string;
+  description: string;
+  category: string;
+  created_at: string;
+  avg_rating: number | null;
+  times_eaten: number;
+  last_eaten: string | null;
+  member_ratings: MemberRatings;
 };
 
-export type PlayerStats = {
+export type RatingEntry = {
+  family_member: string;
+  rating: number;
+};
+
+export type MealEventHistory = {
   id: string;
-  name: string;
-  totalPoints: number;
-  totalPaidIn: number;
-  totalGames: number;
-  wins: number;
-  winRate: number;
-  bockRounds: number;
-  hochzeiten: number;
-  solos: number;
+  date: string;
+  notes: string;
+  created_at: string;
+  ratings: RatingEntry[];
+};
+
+export type RecipeDetail = Recipe & {
+  history: MealEventHistory[];
+};
+
+export type MealEvent = {
+  id: string;
+  recipe_id: string;
+  recipe_title: string;
+  date: string;
+  notes: string;
+  created_at: string;
+  ratings: RatingEntry[];
+};
+
+export type WeekPlanDay = {
+  day: string;
+  recipe: {
+    id: string;
+    title: string;
+    link: string;
+    category: string;
+  };
+  avg_rating: number | null;
+  times_eaten: number;
+};
+
+export type MemberStat = {
+  member: FamilyMember;
+  avg: number | null;
+  total: number;
+};
+
+export type Stats = {
+  totalRecipes: number;
+  totalMeals: number;
+  memberStats: MemberStat[];
+  topRecipe: { title: string; avg: number } | null;
 };

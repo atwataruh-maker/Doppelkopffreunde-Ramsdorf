@@ -1,121 +1,118 @@
-import { Player, Session, SiegerPartei, Spieltyp } from "./types";
+import type { Recipe, RecipeDetail, MealEvent, WeekPlanDay, Stats } from "./types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
-function getPassword() {
-  return sessionStorage.getItem("appPassword") || "";
+function headers(pw: string): Record<string, string> {
+  return { "Content-Type": "application/json", "x-app-password": pw };
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new Error(data?.error || "Unbekannter Fehler");
+async function handle<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
   }
-  return response.json();
+  return res.json() as Promise<T>;
 }
 
-function authHeaders() {
-  return {
-    "Content-Type": "application/json",
-    "x-app-password": getPassword()
-  };
-}
-
-export async function checkAuth(): Promise<boolean> {
-  const response = await fetch(`${API_URL}/api/sessions`, {
-    headers: {
-      "x-app-password": getPassword()
-    }
-  });
-
-  if (response.status === 401) {
+export async function checkAuth(pw: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/api/stats`, { headers: headers(pw) });
+    return res.ok;
+  } catch {
     return false;
   }
+}
 
-  if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new Error(data?.error || "Fehler beim Pruefen des Zugriffs.");
+// ─── Recipes ─────────────────────────────────────────────────────────────────
+
+export async function fetchRecipes(pw: string): Promise<Recipe[]> {
+  return handle(await fetch(`${BASE}/api/recipes`, { headers: headers(pw) }));
+}
+
+export async function fetchRecipe(pw: string, id: string): Promise<RecipeDetail> {
+  return handle(await fetch(`${BASE}/api/recipes/${id}`, { headers: headers(pw) }));
+}
+
+export async function createRecipe(
+  pw: string,
+  data: { title: string; link: string; description: string; category: string }
+): Promise<{ ok: boolean; id: string }> {
+  return handle(
+    await fetch(`${BASE}/api/recipes`, {
+      method: "POST",
+      headers: headers(pw),
+      body: JSON.stringify(data)
+    })
+  );
+}
+
+export async function updateRecipe(
+  pw: string,
+  id: string,
+  data: { title: string; link: string; description: string; category: string }
+): Promise<{ ok: boolean }> {
+  return handle(
+    await fetch(`${BASE}/api/recipes/${id}`, {
+      method: "PUT",
+      headers: headers(pw),
+      body: JSON.stringify(data)
+    })
+  );
+}
+
+export async function deleteRecipe(pw: string, id: string): Promise<{ ok: boolean }> {
+  return handle(
+    await fetch(`${BASE}/api/recipes/${id}`, {
+      method: "DELETE",
+      headers: headers(pw)
+    })
+  );
+}
+
+// ─── Meal Events ─────────────────────────────────────────────────────────────
+
+export async function fetchMealEvents(pw: string): Promise<MealEvent[]> {
+  return handle(await fetch(`${BASE}/api/meal-events`, { headers: headers(pw) }));
+}
+
+export async function createMealEvent(
+  pw: string,
+  data: {
+    recipe_id: string;
+    date: string;
+    notes: string;
+    ratings: Array<{ family_member: string; rating: number }>;
   }
-
-  return true;
+): Promise<{ ok: boolean; id: string }> {
+  return handle(
+    await fetch(`${BASE}/api/meal-events`, {
+      method: "POST",
+      headers: headers(pw),
+      body: JSON.stringify(data)
+    })
+  );
 }
 
-export async function fetchSessions(): Promise<Session[]> {
-  const response = await fetch(`${API_URL}/api/sessions`, {
-    headers: {
-      "x-app-password": getPassword()
-    }
-  });
-  return handleResponse<Session[]>(response);
+export async function deleteMealEvent(pw: string, id: string): Promise<{ ok: boolean }> {
+  return handle(
+    await fetch(`${BASE}/api/meal-events/${id}`, {
+      method: "DELETE",
+      headers: headers(pw)
+    })
+  );
 }
 
-export async function fetchPlayers(): Promise<Player[]> {
-  const response = await fetch(`${API_URL}/api/players`, {
-    headers: {
-      "x-app-password": getPassword()
-    }
-  });
-  return handleResponse<Player[]>(response);
+// ─── Weekly Plan ─────────────────────────────────────────────────────────────
+
+export async function fetchWeeklyPlan(pw: string, seed?: number): Promise<WeekPlanDay[]> {
+  const url = seed !== undefined
+    ? `${BASE}/api/weekly-plan?seed=${seed}`
+    : `${BASE}/api/weekly-plan`;
+  return handle(await fetch(url, { headers: headers(pw) }));
 }
 
-export async function createPlayer(name: string) {
-  const response = await fetch(`${API_URL}/api/players`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ name })
-  });
-  return handleResponse<{ ok: true }>(response);
-}
+// ─── Stats ───────────────────────────────────────────────────────────────────
 
-export async function createSession(playerIds: string[]) {
-  const response = await fetch(`${API_URL}/api/sessions`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ playerIds })
-  });
-  return handleResponse<{ ok: true }>(response);
-}
-
-export async function addGame(
-  sessionId: string,
-  payload: {
-    playerIds: string[];
-    winners: string[];
-    gewonnenVon: Spieltyp;
-    siegerPartei: SiegerPartei;
-    isBockrunde: boolean;
-    partyPoints: number;
-    hochzeitPlayerId: string | null;
-    soloPlayerId: string | null;
-    reAnsage: string;
-    kontraAnsage: string;
-    kommentar: string;
-  }
-) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/games`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload)
-  });
-  return handleResponse<{ ok: true }>(response);
-}
-
-export async function undoGame(sessionId: string) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/undo`, {
-    method: "POST",
-    headers: {
-      "x-app-password": getPassword()
-    }
-  });
-  return handleResponse<{ ok: true }>(response);
-}
-
-export async function endSession(sessionId: string) {
-  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/end`, {
-    method: "POST",
-    headers: {
-      "x-app-password": getPassword()
-    }
-  });
-  return handleResponse<{ ok: true }>(response);
+export async function fetchStats(pw: string): Promise<Stats> {
+  return handle(await fetch(`${BASE}/api/stats`, { headers: headers(pw) }));
 }
