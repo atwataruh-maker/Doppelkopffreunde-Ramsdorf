@@ -77,3 +77,33 @@ export async function endSession(sessionId: string) {
   });
   return handleResponse<{ ok: true }>(response);
 }
+
+export async function editGame(
+  sessionId: string,
+  gameId: string,
+  payload: {
+    playerIds: string[];
+    winners: string[];
+    gewonnenVon: Spieltyp;
+    siegerPartei: SiegerPartei;
+    isBockrunde: boolean;
+    partyPoints: number;
+    hochzeitPlayerId: string | null;
+    soloPlayerId: string | null;
+    reAnsage: string;
+    kontraAnsage: string;
+    kommentar: string;
+  }
+) {
+  const response = await fetch(`${API_URL}/api/sessions/${sessionId}/games/${gameId}/edit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return handleResponse<{ ok: true }>(response);
+}
+
+export async function clearAllSessions() {
+  const response = await fetch(`${API_URL}/api/sessions`, { method: "DELETE" });
+  return handleResponse<{ ok: true }>(response);
+}

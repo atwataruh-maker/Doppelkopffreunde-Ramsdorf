@@ -33,7 +33,7 @@ app.use(
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error("Origin nicht erlaubt"));
     },
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "DELETE"],
     allowedHeaders: ["Content-Type"]
   })
 );
@@ -607,6 +607,85 @@ app.post("/api/sessions/import", writeLimiter, (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.post("/api/sessions/:sessionId/games/:gameId/edit", writeLimiter, (req, res, next) => {
+  try {
+    const sessionId = String(req.params.sessionId);
+    const gameId = String(req.params.gameId);
+    const parsed = addGameSchema.parse(req.body);
+
+    assertUniqueIds(parsed.playerIds, "Es muessen 4 verschiedene Spieler am Tisch sitzen.");
+    assertUniqueIds(parsed.winners, "Ein Gewinner darf nur einmal markiert werden.");
+
+    if (parsed.gewonnenVon === "Solo" && parsed.siegerPartei !== "Solo") {
+      return res.status(400).json({ error: "Bei Spieltyp Solo muss die Siegerpartei Solo sein." });
+    }
+    if (parsed.gewonnenVon !== "Solo" && parsed.siegerPartei === "Solo") {
+      return res.status(400).json({ error: "Solo als Siegerpartei ist nur bei Spieltyp Solo erlaubt." });
+    }
+
+    const session = db.prepare(`SELECT id FROM sessions WHERE id = ?`).get(sessionId) as { id: string } | undefined;
+    if (!session) return res.status(404).json({ error: "Runde nicht gefunden." });
+
+    const game = db.prepare(`SELECT id FROM games WHERE id = ? AND session_id = ?`).get(gameId, sessionId) as { id: string } | undefined;
+    if (!game) return res.status(404).json({ error: "Spiel nicht gefunden." });
+
+    const sessionPlayers = db.prepare(`
+      SELECT gp.id FROM session_players sp
+      JOIN global_players gp ON gp.id = sp.player_id
+      WHERE sp.session_id = ?
+    `).all(sessionId) as { id: string }[];
+    const validPlayerIds = new Set(sessionPlayers.map((p) => p.id));
+
+    if (parsed.playerIds.some((id) => !validPlayerIds.has(id))) {
+      return res.status(400).json({ error: "Ungueltige Spieler in der Tischbesetzung." });
+    }
+    if (parsed.winners.some((id) => !parsed.playerIds.includes(id))) {
+      return res.status(400).json({ error: "Gewinner muessen Teil der 4 Spieler am Tisch sein." });
+    }
+
+    const calculatedScores = calculateLossScores(
+      parsed.playerIds, parsed.winners, parsed.partyPoints,
+      parsed.gewonnenVon, parsed.hochzeitPlayerId, parsed.soloPlayerId
+    );
+
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM game_scores WHERE game_id = ?`).run(gameId);
+      db.prepare(`
+        UPDATE games SET
+          gewonnen_von = ?, sieger_partei = ?, is_bockrunde = ?,
+          party_points = ?, hochzeit_player_id = ?, solo_player_id = ?,
+          re_ansage = ?, kontra_ansage = ?, kommentar = ?
+        WHERE id = ?
+      `).run(
+        parsed.gewonnenVon, parsed.siegerPartei, parsed.isBockrunde ? 1 : 0,
+        parsed.partyPoints, parsed.hochzeitPlayerId, parsed.soloPlayerId,
+        parsed.reAnsage, parsed.kontraAnsage, parsed.kommentar, gameId
+      );
+      calculatedScores.forEach((score) => {
+        db.prepare(`INSERT INTO game_scores (id, game_id, player_id, score, is_winner) VALUES (?, ?, ?, ?, ?)`)
+          .run(crypto.randomUUID(), gameId, score.playerId, score.score, score.isWinner ? 1 : 0);
+      });
+    });
+    tx();
+    audit("game.edit", sessionId, req, { gameId });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/sessions", writeLimiter, (req, res) => {
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM game_scores WHERE game_id IN (SELECT id FROM games)`).run();
+    db.prepare(`DELETE FROM games`).run();
+    db.prepare(`DELETE FROM session_players`).run();
+    db.prepare(`DELETE FROM sessions`).run();
+  });
+  tx();
+  audit("sessions.clear_all", null, req);
+  res.json({ ok: true });
 });
 
 app.post("/api/sessions/:id/undo", writeLimiter, (req, res) => {
