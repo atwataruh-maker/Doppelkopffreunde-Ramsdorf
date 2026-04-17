@@ -1,7 +1,5 @@
 import * as XLSX from "xlsx";
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
-
 type ImportScore = { playerName: string; score: number };
 
 type ImportGame = {
@@ -137,7 +135,7 @@ export function parseExcelFile(file: File): Promise<ImportSession[]> {
 
 /** Sendet eine geparste Runde an den Server */
 export async function importSession(session: ImportSession): Promise<void> {
-  const response = await fetch(`${API_URL}/api/sessions/import`, {
+  const response = await fetch("/api/sessions/import", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(session)

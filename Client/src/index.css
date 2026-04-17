@@ -784,3 +784,197 @@ select.text-input option {
     font-size: 1.9rem;
   }
 }
+
+/* ── SessionStats ─────────────────────────────────────────── */
+
+.session-stats-section {
+  margin-top: 32px;
+}
+
+.stats-winner-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(230, 185, 61, 0.18), rgba(246, 211, 101, 0.08));
+  border: 1px solid rgba(230, 185, 61, 0.3);
+  margin-bottom: 24px;
+}
+
+.winner-trophy {
+  font-size: 1.6rem;
+}
+
+.winner-label {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.winner-name {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--primary);
+  flex: 1;
+}
+
+.winner-points {
+  font-weight: 700;
+  color: var(--success);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.kpi-card {
+  padding: 18px 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--surface), var(--surface-strong));
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+.kpi-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.kpi-label {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.stats-section-title {
+  margin: 28px 0 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-soft);
+}
+
+.ranking-table-wrapper {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface), var(--surface-strong));
+  margin-bottom: 28px;
+}
+
+.ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.ranking-table th {
+  padding: 12px 14px;
+  text-align: center;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-soft);
+  border-bottom: 1px solid var(--line);
+}
+
+.ranking-table td {
+  padding: 12px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.ranking-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ranking-table tr.rank-first td {
+  background: rgba(230, 185, 61, 0.06);
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.rank-badge.rank-1 { background: rgba(230, 185, 61, 0.25); color: var(--primary); }
+.rank-badge.rank-2 { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+.rank-badge.rank-3 { background: rgba(180, 120, 60, 0.2); color: #b4783c; }
+
+.points-pos { color: var(--success); font-weight: 700; }
+.points-neg { color: var(--danger); font-weight: 700; }
+
+.charts-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-bottom: 8px;
+}
+
+.chart-card {
+  padding: 18px;
+}
+
+.chart-card h4 {
+  margin: 0 0 14px;
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-soft);
+}
+
+.highlights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.highlight-card {
+  padding: 18px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface), var(--surface-strong));
+  text-align: center;
+}
+
+.highlight-best { border-color: rgba(74, 222, 128, 0.25); }
+.highlight-worst { border-color: rgba(248, 113, 113, 0.25); }
+.highlight-streak { border-color: rgba(251, 146, 60, 0.25); }
+.highlight-solo { border-color: rgba(167, 139, 250, 0.25); }
+
+.highlight-icon {
+  font-size: 1.8rem;
+  margin-bottom: 8px;
+}
+
+.highlight-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+
+.highlight-player {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.highlight-value {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--primary);
+}

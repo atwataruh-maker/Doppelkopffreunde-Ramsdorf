@@ -25,6 +25,7 @@ import {
 import { Game, Player, PlayerStats, Session, SiegerPartei, Spieltyp } from "./types";
 import { exportAllSessions, exportSession } from "./export";
 import { importSession, parseExcelFile } from "./import";
+import SessionStats from "./SessionStats";
 
 type View = "sessions" | "stats" | "detail";
 
@@ -723,50 +724,7 @@ function App() {
               </div>
             </section>
 
-            <section className="player-pool-card" style={{ marginBottom: "1.5rem" }}>
-              <div className="player-pool-head">
-                <div>
-                  <h2>Rundenstatistik</h2>
-                  <p>Aktueller Punktestand nach {selectedSession.games.length} Spielen.</p>
-                </div>
-                <span className="badge">{selectedSession.games.length} Spiele</span>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "12px" }}>
-                {[...selectedSession.players]
-                  .map((player) => ({ ...player, total: getTotalForPlayer(selectedSession, player.id) }))
-                  .sort((a, b) => b.total - a.total)
-                  .map((player, index) => (
-                    <div
-                      key={player.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: "10px",
-                        padding: "10px 16px",
-                        minWidth: "180px",
-                        flex: "1 1 180px"
-                      }}
-                    >
-                      <span style={{ color: "var(--text-soft)", fontWeight: 700, fontSize: "1.1em", minWidth: "24px" }}>
-                        {index + 1}.
-                      </span>
-                      <span className="avatar">{player.name.charAt(0).toUpperCase()}</span>
-                      <span style={{ flex: 1, fontWeight: 600 }}>{player.name}</span>
-                      <div style={{ textAlign: "right" }}>
-                        <div className={player.total >= 0 ? "positive" : "negative"} style={{ fontWeight: 700, fontSize: "1.1em" }}>
-                          {player.total > 0 ? `+${player.total}` : player.total}
-                        </div>
-                        <div style={{ color: "var(--text-soft)", fontSize: "0.8em" }}>
-                          {formatEuroAmount(player.total)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </section>
+            <SessionStats session={selectedSession} />
 
             <div className="table-card">
               <table>

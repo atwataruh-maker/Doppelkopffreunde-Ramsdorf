@@ -12,6 +12,9 @@ Server/data/
 .env
 !.env.example
 !.env.docker.example
+Client/.env
+Client/.env.production
+Server/.env
 
 # Logs
 *.log
