@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/api.ts","./src/export.ts","./src/import.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts"],"version":"5.9.3"}
+{"root":["./src/App.tsx","./src/SessionStats.tsx","./src/api.ts","./src/export.ts","./src/import.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts"],"version":"5.9.3"}
