@@ -14,12 +14,13 @@ import {
 import "./index.css";
 import {
   addGame,
+  clearAllSessions,
   createPlayer,
   createSession,
+  editGame,
   endSession,
   fetchPlayers,
-  fetchSessions,
-  undoGame
+  fetchSessions
 } from "./api";
 import { Game, Player, PlayerStats, Session, SiegerPartei, Spieltyp } from "./types";
 import { exportAllSessions, exportSession } from "./export";
@@ -137,6 +138,9 @@ function App() {
   const [kontraAnsage, setKontraAnsage] = useState("");
   const [kommentar, setKommentar] = useState("");
   const [importing, setImporting] = useState(false);
+  const [showImportWarning, setShowImportWarning] = useState(false);
+  const [pendingImportSessions, setPendingImportSessions] = useState<import("./import").ImportSession[]>([]);
+  const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) || null;
@@ -297,6 +301,7 @@ function App() {
     setReAnsage("");
     setKontraAnsage("");
     setKommentar("");
+    setEditingGameId(null);
   }
 
   function openAddGameModal() {
@@ -304,6 +309,25 @@ function App() {
     resetGameForm();
     const defaults = selectedSession.players.slice(0, 4).map((player) => player.id);
     setSelectedGamePlayers([...defaults, ...Array.from({ length: Math.max(0, 4 - defaults.length) }, () => "")]);
+    setShowAddGame(true);
+  }
+
+  function openEditGameModal(game: Game) {
+    if (!selectedSession) return;
+    resetGameForm();
+    const playerIds = game.scores.map((s) => s.playerId);
+    setSelectedGamePlayers([...playerIds, ...Array(Math.max(0, 4 - playerIds.length)).fill("")]);
+    setGewonnenVon(game.meta.gewonnenVon);
+    setSiegerPartei(game.meta.siegerPartei);
+    setIsBockrunde(game.meta.isBockrunde);
+    setPartyPoints(game.meta.partyPoints);
+    setSelectedWinners(game.scores.filter((s) => s.isWinner).map((s) => s.playerId));
+    setHochzeitPlayerId(game.meta.hochzeitPlayerId);
+    setSoloPlayerId(game.meta.soloPlayerId);
+    setReAnsage(game.meta.reAnsage);
+    setKontraAnsage(game.meta.kontraAnsage);
+    setKommentar(game.meta.kommentar);
+    setEditingGameId(game.id);
     setShowAddGame(true);
   }
 
@@ -405,19 +429,35 @@ function App() {
         return;
       }
 
-      await addGame(selectedSession.id, {
-        playerIds: cleanedGamePlayers,
-        winners: selectedWinners,
-        gewonnenVon,
-        siegerPartei,
-        isBockrunde,
-        partyPoints,
-        hochzeitPlayerId: gewonnenVon === "Hochzeit" ? hochzeitPlayerId : null,
-        soloPlayerId: gewonnenVon === "Solo" ? soloPlayerId : null,
-        reAnsage,
-        kontraAnsage,
-        kommentar
-      });
+      if (editingGameId) {
+        await editGame(selectedSession.id, editingGameId, {
+          playerIds: cleanedGamePlayers,
+          winners: selectedWinners,
+          gewonnenVon,
+          siegerPartei,
+          isBockrunde,
+          partyPoints,
+          hochzeitPlayerId: gewonnenVon === "Hochzeit" ? hochzeitPlayerId : null,
+          soloPlayerId: gewonnenVon === "Solo" ? soloPlayerId : null,
+          reAnsage,
+          kontraAnsage,
+          kommentar
+        });
+      } else {
+        await addGame(selectedSession.id, {
+          playerIds: cleanedGamePlayers,
+          winners: selectedWinners,
+          gewonnenVon,
+          siegerPartei,
+          isBockrunde,
+          partyPoints,
+          hochzeitPlayerId: gewonnenVon === "Hochzeit" ? hochzeitPlayerId : null,
+          soloPlayerId: gewonnenVon === "Solo" ? soloPlayerId : null,
+          reAnsage,
+          kontraAnsage,
+          kommentar
+        });
+      }
 
       setShowAddGame(false);
       resetGameForm();
@@ -427,15 +467,6 @@ function App() {
     }
   }
 
-  async function handleUndo() {
-    if (!selectedSession) return;
-    try {
-      await undoGame(selectedSession.id);
-      await loadData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Fehler");
-    }
-  }
 
   async function handleEndSession() {
     if (!selectedSession) return;
@@ -450,9 +481,7 @@ function App() {
   async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    // Input zurücksetzen, damit dieselbe Datei erneut gewählt werden kann
     event.target.value = "";
-
     setImporting(true);
     try {
       const sessions = await parseExcelFile(file);
@@ -460,11 +489,26 @@ function App() {
         alert("Keine gültigen Runden in der Datei gefunden.");
         return;
       }
-      for (const session of sessions) {
+      setPendingImportSessions(sessions);
+      setShowImportWarning(true);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Import fehlgeschlagen.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleConfirmImport() {
+    setShowImportWarning(false);
+    setImporting(true);
+    try {
+      await clearAllSessions();
+      for (const session of pendingImportSessions) {
         await importSession(session);
       }
+      setPendingImportSessions([]);
       await loadData();
-      alert(`${sessions.length} Runde(n) erfolgreich importiert.`);
+      alert(`${pendingImportSessions.length} Runde(n) erfolgreich importiert.`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Import fehlgeschlagen.");
     } finally {
@@ -643,9 +687,6 @@ function App() {
                 >
                   + Spiel erfassen
                 </button>
-                <button className="secondary-btn" onClick={handleUndo}>
-                  Rueckgaengig
-                </button>
                 <button
                   className="secondary-btn"
                   onClick={() => exportSession(selectedSession)}
@@ -682,6 +723,51 @@ function App() {
               </div>
             </section>
 
+            <section className="player-pool-card" style={{ marginBottom: "1.5rem" }}>
+              <div className="player-pool-head">
+                <div>
+                  <h2>Rundenstatistik</h2>
+                  <p>Aktueller Punktestand nach {selectedSession.games.length} Spielen.</p>
+                </div>
+                <span className="badge">{selectedSession.games.length} Spiele</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "12px" }}>
+                {[...selectedSession.players]
+                  .map((player) => ({ ...player, total: getTotalForPlayer(selectedSession, player.id) }))
+                  .sort((a, b) => b.total - a.total)
+                  .map((player, index) => (
+                    <div
+                      key={player.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: "10px",
+                        padding: "10px 16px",
+                        minWidth: "180px",
+                        flex: "1 1 180px"
+                      }}
+                    >
+                      <span style={{ color: "var(--text-soft)", fontWeight: 700, fontSize: "1.1em", minWidth: "24px" }}>
+                        {index + 1}.
+                      </span>
+                      <span className="avatar">{player.name.charAt(0).toUpperCase()}</span>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{player.name}</span>
+                      <div style={{ textAlign: "right" }}>
+                        <div className={player.total >= 0 ? "positive" : "negative"} style={{ fontWeight: 700, fontSize: "1.1em" }}>
+                          {player.total > 0 ? `+${player.total}` : player.total}
+                        </div>
+                        <div style={{ color: "var(--text-soft)", fontSize: "0.8em" }}>
+                          {formatEuroAmount(player.total)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </section>
+
             <div className="table-card">
               <table>
                 <thead>
@@ -691,6 +777,7 @@ function App() {
                     {selectedSession.players.map((player) => (
                       <th key={player.id}>{player.name}</th>
                     ))}
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -728,6 +815,15 @@ function App() {
                           </td>
                         );
                       })}
+                      <td>
+                        <button
+                          className="secondary-btn"
+                          style={{ padding: "4px 10px", fontSize: "0.8em" }}
+                          onClick={() => openEditGameModal(game)}
+                        >
+                          Bearbeiten
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   <tr className="sum-row">
@@ -741,6 +837,7 @@ function App() {
                         </td>
                       );
                     })}
+                    <td></td>
                   </tr>
                 </tbody>
               </table>
@@ -1066,7 +1163,7 @@ function App() {
       {showAddGame && selectedSession && (
         <div className="modal-overlay">
           <div className="modal-card modal-card-lg">
-            <h2>Spiel erfassen</h2>
+            <h2>{editingGameId ? "Spiel bearbeiten" : "Spiel erfassen"}</h2>
             <p>Waehle zuerst die 4 Spieler am Tisch aus. Alle weiteren Angaben beziehen sich nur auf diese Vier.</p>
 
             <div className="section-block">
@@ -1358,7 +1455,36 @@ function App() {
                 Abbrechen
               </button>
               <button className="primary-btn" onClick={handleAddGame}>
-                Speichern
+                {editingGameId ? "Änderungen speichern" : "Spiel speichern"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportWarning && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h2 style={{ color: "var(--danger)" }}>⚠ Achtung: Alle Daten werden überschrieben!</h2>
+            <p>
+              Diese Aktion löscht <strong>alle bestehenden Runden und Spiele</strong> unwiderruflich
+              und ersetzt sie durch die Daten aus der importierten Datei.
+            </p>
+            <p style={{ color: "var(--text-soft)", fontSize: "0.9em" }}>
+              Der Spielerpool bleibt erhalten. Es werden {pendingImportSessions.length} Runde(n) importiert.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="secondary-btn"
+                onClick={() => { setShowImportWarning(false); setPendingImportSessions([]); }}
+              >
+                Abbrechen
+              </button>
+              <button
+                className="primary-btn danger-btn"
+                onClick={handleConfirmImport}
+              >
+                Ja, alles überschreiben
               </button>
             </div>
           </div>
